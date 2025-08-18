@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+set -e
+
+export LC_ALL=ru_RU.UTF-8
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ROOT_DIR="$SCRIPT_DIR/../.."
+
+TMP_DIR=`mktemp -d`
+
+######################
+
+mkdir -p "$TMP_DIR/root/{directory,structure,foo\ bar}/sample"
+
+touch "$TMP_DIR/root/foo\ bar/baz"
+touch "$TMP_DIR/root/directory/sample/foo.txt"
+ln -s "sample/foo.txt" "$TMP_DIR/root/directory/foo.link"
+cat <<EOF >"$TMP_DIR/root/directory/structure/bar.txt"
+foo
+bar
+baz
+EOF
+
+EXPECTED="$TMP_DIR/root"
+
+######################
+
+function test_solution() {
+  set +e
+  ACTUAL=`"$ROOT_DIR/solution/untar" "$ARCHIVE_NAME" 2>&1`
+  ACTUAL_EXIT=$?
+  set -e
+  if [[ $ACTUAL_EXIT ]]; then
+    echo "$ACTUAL"
+    exit $ACTUAL_EXIT
+  fi
+  diff -r -U 1000 "$EXPECTED" "$ARCHIVE_NAME.orig" \
+    || (echo && echo "Test structure:" && tree "$EXPECTED" && exit 1)
+}
+
+
+echo "Test case #1 (simple)"
+
+ARCHIVE_NAME="$TMP_DIR/test.tar"
+rm -rf "$ARCHIVE_NAME.unpacked"
+tar cf "$ARCHIVE_NAME" "$EXPECTED"
+test_solution
+
+
+echo "Test case #2 (overwriting target dir)"
+
+ARCHIVE_NAME="$TMP_DIR/test.tar"
+touch "$ARCHIVE_NAME.unpacked/root" # check overwriting
+tar cf "$ARCHIVE_NAME" "$EXPECTED"
+test_solution
+
+
+echo "Test case #3 (compressed with gzip)"
+
+ARCHIVE_NAME="$TMP_DIR/test.tar.gz"
+rm -rf "$ARCHIVE_NAME.unpacked"
+tar cfz "$ARCHIVE_NAME" "$EXPECTED"
+test_solution
+
+
+echo "Test case #4 (compressed with xz)"
+
+ARCHIVE_NAME="$TMP_DIR/test.tar.xz"
+rm -rf "$ARCHIVE_NAME.unpacked"
+tar cfJ "$ARCHIVE_NAME" "$EXPECTED"
+test_solution
+
+
+echo "Test case #5 (name with spaces)"
+
+ARCHIVE_NAME="$TMP_DIR/test\ name.tar"
+rm -rf "$ARCHIVE_NAME.unpacked"
+tar cf "$ARCHIVE_NAME" "$EXPECTED"
+test_solution
